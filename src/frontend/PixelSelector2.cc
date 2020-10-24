@@ -116,7 +116,7 @@ namespace ldso {
     }
 
     /**
-     * @brief 从输入的图像中筛选出点
+     * @brief 从输入的原始图像中筛选出点
      * */
     int PixelSelector::makeMaps(const shared_ptr<FrameHessian> fh, float *map_out, float density,
                                 int recursionsLeft, bool plot, float thFactor) {

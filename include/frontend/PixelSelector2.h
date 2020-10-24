@@ -42,7 +42,7 @@ namespace ldso {
 
         void makeHists(shared_ptr<FrameHessian> fh);
 
-        int currentPotential;
+        int currentPotential;// 网格的大小，3
         bool allowFast = false;
     private:
 

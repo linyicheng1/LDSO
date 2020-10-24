@@ -212,7 +212,7 @@ namespace ldso {
 
         shared_ptr<CalibHessian> cam;
     };
-    i// 仅仅优化位姿的误差
+    // 仅仅优化位姿的误差
     class EdgeProjectPoseOnly : public BaseUnaryEdge<2, Vector2d, VertexPR> {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;

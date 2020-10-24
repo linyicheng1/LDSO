@@ -30,31 +30,31 @@ namespace ldso {
 
         // idepth / isgood / energy during optimization.
         float idepth;// 逆深度
-        bool isGood;// 是否良好的跟踪到
-        Vec2f energy;        // 残差 (UenergyPhotometric, energyRegularizer)
-        bool isGood_new;
-        float idepth_new;
-        Vec2f energy_new;
+        bool isGood;// 在新图像内，相机前，像素值有穷则好
+        Vec2f energy;        // 残差的平方 (UenergyPhotometric, energyRegularizer)
+        bool isGood_new;// 在新的一帧中是否为好的
+        float idepth_new;// 在新的一帧中的逆深度
+        Vec2f energy_new;// 在新的一帧中的残差
 
-        float iR;
-        float iRSumNum;
+        float iR;       // 逆深度的期望值
+        float iRSumNum; // 子点逆深度信息矩阵之和
 
-        float lastHessian;
-        float lastHessian_new;
+        float lastHessian;// 逆深度的协方差
+        float lastHessian_new;// 新一次迭代后的逆深度协方差
 
         // max stepsize for idepth (corresponding to max. movement in pixel-space).
-        float maxstep;
+        float maxstep;// 逆深度增加的最大步长
 
         // idx (x+y*w) of closest point one pyramid level above.
-        int parent;
-        float parentDist;
+        int parent;// 上一层中该点的父节点
+        float parentDist;// 上一层中与父节点的距离
 
         // idx (x+y*w) of up to 10 nearest points in pixel space.
-        int neighbours[10];
-        float neighboursDist[10];
+        int neighbours[10];// 图像中距离该店最近的10个点
+        float neighboursDist[10];// 最近十个点的距离
 
-        float my_type;
-        float outlierTH;
+        float my_type;// 第零层提取是 1 2 4，其他是1 
+        float outlierTH;// 外点阈值
     };
 
     /**
@@ -71,17 +71,18 @@ namespace ldso {
         ~CoarseInitializer();
         // 设置第一帧数据
         void setFirst(shared_ptr<CalibHessian> HCalib, shared_ptr<FrameHessian> newFrameHessian);
-        // 跟踪后面的数据
+        // 第二帧的数据
         bool trackFrame(shared_ptr<FrameHessian> newFrameHessian);
         // 
         void calcTGrads(shared_ptr<FrameHessian> newFrameHessian);
 
-        int frameID = -1;
-        bool fixAffine = true;// 是否需要仿射变换
+        int frameID = -1;// 当前加入的帧数
+        bool fixAffine = true;// 是否优化光度误差
         bool printDebug = false;// 是否输出调试信息
 
         Pnt *points[PYR_LEVELS];// 存储每一层图像金字塔内的点
         int numPoints[PYR_LEVELS];// 存储每一层图像金字塔内含有点的数量
+
         AffLight thisToNext_aff;// 当前帧到下一帧的光度仿射变换
         SE3 thisToNext;// 当前帧到下一帧的位姿变换
 
@@ -105,8 +106,8 @@ namespace ldso {
         // 计算金字塔各层对应的相机参数，得到上面的所有参数
         void makeK(shared_ptr<CalibHessian> HCalib);
 
-        bool snapped;
-        int snappedAt;
+        bool snapped;// 是否尺度收敛
+        int snappedAt;// 尺度收敛在第几帧
 
         // pyramid images & levels on all levels
         Eigen::Vector3f *dINew[PYR_LEVELS];
@@ -116,8 +117,9 @@ namespace ldso {
 
         // temporary buffers for H and b.
         Vec10f *JbBuffer;            // 0-7: sum(dd * dp). 8: sum(res*dd). 9: 1/(1+sum(dd*dd))=inverse hessian entry.
-        Vec10f *JbBuffer_new;
+        Vec10f *JbBuffer_new; // 迭代更新后的数据
 
+        // 9维向量，乘积获得9*9矩阵
         Accumulator9 acc9;
         Accumulator9 acc9SC;
 

@@ -45,80 +45,86 @@ namespace ldso {
     }
     // 输入第二帧数据进行处理
     bool CoarseInitializer::trackFrame(shared_ptr<FrameHessian> newFrameHessian) {
-        // 
+        // 记录作为新的一帧
         newFrame = newFrameHessian;
         int maxIterations[] = {5, 5, 10, 30, 50};
-
+        // 一些参数
         alphaK = 2.5 * 2.5;
         alphaW = 150 * 150;
         regWeight = 0.8;
         couplingWeight = 1;
-
+        // 如果位移不够大，认为上一次的数据不够准确，直接重新初始化所有参数，重新计算
         if (!snapped) {
+            // 平移量初始化为0
             thisToNext.translation().setZero();
             for (int lvl = 0; lvl < pyrLevelsUsed; lvl++) {
                 int npts = numPoints[lvl];
                 Pnt *ptsl = points[lvl];
                 for (int i = 0; i < npts; i++) {
-                    ptsl[i].iR = 1;
-                    ptsl[i].idepth_new = 1;
-                    ptsl[i].lastHessian = 0;
+                    ptsl[i].iR = 1;// 初始化逆深度为1
+                    ptsl[i].idepth_new = 1;// 初始化逆深度为1 
+                    ptsl[i].lastHessian = 0;//
                 }
             }
         }
-
+        // 平移 和 光度变换 初始值
+        // 上一次的值作为这一次计算的初始值
         SE3 refToNew_current = thisToNext;
         AffLight refToNew_aff_current = thisToNext_aff;
-
+        // 根据曝光时间计算一个初始值
         if (firstFrame->ab_exposure > 0 && newFrame->ab_exposure > 0)
             refToNew_aff_current = AffLight(logf(newFrame->ab_exposure / firstFrame->ab_exposure),
                                             0); // coarse approximation.
-
-
-        Vec3f latestRes = Vec3f::Zero();
-        for (int lvl = pyrLevelsUsed - 1; lvl >= 0; lvl--) {
-
-
+        // 残差赋初始值为零
+        Vec3f latestRes = Vec3f::Zero();    
+        for (int lvl = pyrLevelsUsed - 1; lvl >= 0; lvl--)
+        {//从低分辨率到高分辨率遍历
+            // 除了顶层都要执行函数，进行初始化
             if (lvl < pyrLevelsUsed - 1)
-                propagateDown(lvl + 1);
+                propagateDown(lvl + 1);// 使用上一层的值来初始化下一层
 
             Mat88f H, Hsc;
             Vec8f b, bsc;
+            // 顶层初始化
             resetPoints(lvl);
+            // 迭代计算前线计算H矩阵等
             Vec3f resOld = calcResAndGS(lvl, H, b, Hsc, bsc, refToNew_current, refToNew_aff_current, false);
+            // 上一次的误差赋值给新的
             applyStep(lvl);
-
+            // 迭代的参数
             float lambda = 0.1;
             float eps = 1e-4;
             int fails = 0;
 
-            int iteration = 0;
+            int iteration = 0;// 迭代次数
             while (true) {
+                // 开始循环迭代求解
                 Mat88f Hl = H;
                 for (int i = 0; i < 8; i++) Hl(i, i) *= (1 + lambda);
+                // 舒尔补，边缘化掉逆深度
                 Hl -= Hsc * (1 / (1 + lambda));
                 Vec8f bl = b - bsc * (1 / (1 + lambda));
-
+                // 
                 Hl = wM * Hl * wM * (0.01f / (w[lvl] * h[lvl]));
                 bl = wM * bl * (0.01f / (w[lvl] * h[lvl]));
 
-
+                // 求解增量
                 Vec8f inc;
-                if (fixAffine) {
+                if (fixAffine) {// 固定光度参数
                     inc.head<6>() = -(wM.toDenseMatrix().topLeftCorner<6, 6>() *
                                       (Hl.topLeftCorner<6, 6>().ldlt().solve(bl.head<6>())));
                     inc.tail<2>().setZero();
                 } else
                     inc = -(wM * (Hl.ldlt().solve(bl)));    //=-H^-1 * b.
 
-
+                // 更新状态，更新逆深度
                 SE3 refToNew_new = SE3::exp(inc.head<6>().cast<double>()) * refToNew_current;
                 AffLight refToNew_aff_new = refToNew_aff_current;
                 refToNew_aff_new.a += inc[6];
                 refToNew_aff_new.b += inc[7];
                 doStep(lvl, lambda, inc);
 
-
+                // 计算更新后的残差，与旧的对比判断是否接受结果
                 Mat88f H_new, Hsc_new;
                 Vec8f b_new, bsc_new;
                 Vec3f resNew = calcResAndGS(lvl, H_new, b_new, Hsc_new, bsc_new, refToNew_new, refToNew_aff_new, false);
@@ -129,9 +135,9 @@ namespace ldso {
 
 
                 bool accept = eTotalOld > eTotalNew;
-
+                // 接受的话，更新状态
                 if (accept) {
-
+                    // 当位移足够大时才开始优化IR
                     if (resNew[1] == alphaK * numPoints[lvl])
                         snapped = true;
                     H = H_new;
@@ -146,14 +152,14 @@ namespace ldso {
                     lambda *= 0.5;
                     fails = 0;
                     if (lambda < 0.0001) lambda = 0.0001;
-                } else {
+                } else {// 否则增大Lambda再次迭代计算
                     fails++;
                     lambda *= 4;
                     if (lambda > 10000) lambda = 10000;
                 }
 
                 bool quitOpt = false;
-
+                // 迭代停止条件 1、收敛 2、大于最大次数 3、失败两次以上
                 if (!(inc.norm() > eps) || iteration >= maxIterations[lvl] || fails >= 2) {
                     Mat88f H, Hsc;
                     Vec8f b, bsc;
@@ -171,7 +177,7 @@ namespace ldso {
 
         thisToNext = refToNew_current;
         thisToNext_aff = refToNew_aff_current;
-
+        // 从底层计算上层点的深度
         for (int i = 0; i < pyrLevelsUsed - 1; i++)
             propagateUp(i);
 
@@ -180,30 +186,33 @@ namespace ldso {
 
         if (snapped && snappedAt == 0)
             snappedAt = frameID;
-
+        // 位移足够大后，再优化5帧才行
         return snapped && frameID > snappedAt + 5;
     }
 
     // calculates residual, Hessian and Hessian-block neede for re-substituting depth.
+    // 计算残差，Hessian矩阵以及舒尔补，sc代表Schur
     Vec3f CoarseInitializer::calcResAndGS(
             int lvl, Mat88f &H_out, Vec8f &b_out,
             Mat88f &H_out_sc, Vec8f &b_out_sc,
             const SE3 &refToNew, AffLight refToNew_aff,
             bool plot) {
         int wl = w[lvl], hl = h[lvl];
+        // 当前层图像及梯度
         Eigen::Vector3f *colorRef = firstFrame->dIp[lvl];
         Eigen::Vector3f *colorNew = newFrame->dIp[lvl];
-
+        // 旋转矩阵R * 内参矩阵 K_inv
         Mat33f RKi = (refToNew.rotationMatrix() * Ki[lvl]).cast<float>();
         Vec3f t = refToNew.translation().cast<float>();
         Eigen::Vector2f r2new_aff = Eigen::Vector2f(exp(refToNew_aff.a), refToNew_aff.b);
-
+        // 该层的相机参数
         float fxl = fx[lvl];
         float fyl = fy[lvl];
         float cxl = cx[lvl];
         float cyl = cy[lvl];
 
-        Accumulator11 E;
+        Accumulator11 E;// 1*1 的累加器
+        // 初始值分配空间
         acc9.initialize();
         E.initialize();
 
@@ -222,7 +231,7 @@ namespace ldso {
                 continue;
             }
 
-            VecNRf dp0;
+            VecNRf dp0;// 8*1矩阵，每个点附近的残差个数为8个
             VecNRf dp1;
             VecNRf dp2;
             VecNRf dp3;
@@ -433,7 +442,8 @@ namespace ldso {
 
         return Vec3f(couplingWeight * E.A1m[0], couplingWeight * E.A1m[1], E.num);
     }
-
+    //* 计算旧的和新的逆深度与iR的差值, 返回旧的差, 新的差, 数目
+    //? iR到底是啥呢     答：IR是逆深度的均值，尺度收敛到IR
     void CoarseInitializer::optReg(int lvl) {
         int npts = numPoints[lvl];
         Pnt *ptsl = points[lvl];
@@ -465,7 +475,7 @@ namespace ldso {
 
     }
 
-
+    //* 使用归一化积来更新高层逆深度值
     void CoarseInitializer::propagateUp(int srcLvl) {
         assert(srcLvl + 1 < pyrLevelsUsed);
         // set idepth of target
@@ -501,7 +511,9 @@ namespace ldso {
 
         optReg(srcLvl + 1);
     }
-
+    //@ 使用上层信息来初始化下层
+    //@ param: 当前的金字塔层+1
+    //@ note: 没法初始化顶层值 
     void CoarseInitializer::propagateDown(int srcLvl) {
         assert(srcLvl > 0);
         // set idepth of target
@@ -528,7 +540,7 @@ namespace ldso {
         optReg(srcLvl - 1);
     }
 
-
+    //* 低层计算高层, 像素值和梯度
     void CoarseInitializer::makeGradients(Eigen::Vector3f **data) {
         for (int lvl = 1; lvl < pyrLevelsUsed; lvl++) {
             int lvlm1 = lvl - 1;
@@ -560,36 +572,42 @@ namespace ldso {
         makeK(HCalib);
         // 第一帧指向新的一帧
         firstFrame = newFrameHessian;
-        // PixelSelector  
+        // 像素选择类
         PixelSelector sel(w[0], h[0]);
         // 存储各点的状态，statusMap > 0 即为被选中的点
         float *statusMap = new float[w[0] * h[0]];
         bool *statusMapB = new bool[w[0] * h[0]];
-
+        // 不同层取得点密度不同
         float densities[] = {0.03, 0.05, 0.15, 0.5, 1};
         // 遍历所有的金字塔层级
+        // 针对不同层数选择大梯度像素，第零层比较复杂1d 2d 4d 大小block来选择三个层次的像素
         for (int lvl = 0; lvl < pyrLevelsUsed; lvl++) 
         {
-            sel.currentPotential = 3;
-            int npts;
+            sel.currentPotential = 3;// 设置网格的大小 3x3
+            int npts;//选择像素点的数目
             // 选择梯度明显的点
-            if (lvl == 0) {
+            if (lvl == 0) {// 第零层提取特征像素
                 npts = sel.makeMaps(firstFrame, statusMap, densities[lvl] * w[0] * h[0], 1, false, 2);
-            } else {
+            } else {// 其他层提取goodPoints 
                 npts = makePixelStatus(firstFrame->dIp[lvl], statusMapB, w[lvl], h[lvl], densities[lvl] * w[0] * h[0]);
             }
-
+            // 如果非空，删除释放空间，创建新的
             if (points[lvl] != 0) delete[] points[lvl];
             // 创建一个新的点
             points[lvl] = new Pnt[npts];
 
             // set idepth map to initially 1 everywhere.
-            int wl = w[lvl], hl = h[lvl];
-            Pnt *pl = points[lvl];
+            int wl = w[lvl], hl = h[lvl];// 每一层图像的大小
+            Pnt *pl = points[lvl];// 每一层图像上的点
             int nl = 0;
+            // 留出patternPadding空间
             for (int y = patternPadding + 1; y < hl - patternPadding - 2; y++)
-                for (int x = patternPadding + 1; x < wl - patternPadding - 2; x++) {
-                    if ((lvl != 0 && statusMapB[x + y * wl]) || (lvl == 0 && statusMap[x + y * wl] != 0)) {
+                for (int x = patternPadding + 1; x < wl - patternPadding - 2; x++)
+                {
+                    // 如果是被选中的点
+                    // 第零层和其他选择的方式不一样
+                    if ((lvl != 0 && statusMapB[x + y * wl]) || (lvl == 0 && statusMap[x + y * wl] != 0))
+                    {
                         //assert(patternNum==9);
                         // 对当前层所有点进行赋值
                         pl[nl].u = x + 0.1;
@@ -601,10 +619,12 @@ namespace ldso {
                         pl[nl].lastHessian = 0;
                         pl[nl].lastHessian_new = 0;
                         pl[nl].my_type = (lvl != 0) ? 1 : statusMap[x + y * wl];
-
+                        // 像素点的梯度
                         Eigen::Vector3f *cpt = firstFrame->dIp[lvl] + x + y * w[lvl];
                         float sumGrad2 = 0;
-                        for (int idx = 0; idx < patternNum; idx++) {
+                        // pattern内像素梯度之和
+                        for (int idx = 0; idx < patternNum; idx++)
+                        {
                             int dx = patternP[idx][0];
                             int dy = patternP[idx][1];
                             float absgrad = cpt[dx + dy * w[lvl]].tail<2>().squaredNorm();
@@ -623,9 +643,9 @@ namespace ldso {
         }
         delete[] statusMap;
         delete[] statusMapB;
-
+        // 计算点的最邻近点和父点
         makeNN();
-
+        // 一些参数的初始化
         thisToNext = SE3();
         snapped = false;
         frameID = snappedAt = 0;
@@ -634,16 +654,20 @@ namespace ldso {
             dGrads[i].setZero();
 
     }
-
+    //@ 重置点的energy, idepth_new参数
     void CoarseInitializer::resetPoints(int lvl) {
+        // lvl层的点
         Pnt *pts = points[lvl];
+        // lvl层点的数量
         int npts = numPoints[lvl];
         for (int i = 0; i < npts; i++) {
+            // 所有的点的残差设置为零
             pts[i].energy.setZero();
+            // 新的逆深度初始化为之前的逆深度
             pts[i].idepth_new = pts[i].idepth;
 
-
             if (lvl == pyrLevelsUsed - 1 && !pts[i].isGood) {
+                // 如果当前层是最顶层，使用周围点的平均值来重置
                 float snd = 0, sn = 0;
                 for (int n = 0; n < 10; n++) {
                     if (pts[i].neighbours[n] == -1 || !pts[pts[i].neighbours[n]].isGood) continue;
@@ -658,7 +682,7 @@ namespace ldso {
             }
         }
     }
-
+    //* 求出状态增量后, 计算被边缘化掉的逆深度, 更新逆深度
     void CoarseInitializer::doStep(int lvl, float lambda, Vec8f inc) {
 
         const float maxPixelStep = 0.25;
@@ -686,7 +710,7 @@ namespace ldso {
         }
 
     }
-
+    //* 新的值赋值给旧的 (能量, 点状态, 逆深度, hessian)
     void CoarseInitializer::applyStep(int lvl) {
         Pnt *pts = points[lvl];
         int npts = numPoints[lvl];
@@ -738,7 +762,7 @@ namespace ldso {
             cyi[level] = Ki[level](1, 2);
         }
     }
-
+    //@ 生成每一层点的KDTree, 并用其找到邻近点集和父点 
     void CoarseInitializer::makeNN() {
         const float NNDistFactor = 0.05;
 

@@ -10,11 +10,12 @@
 namespace ldso {
 
     namespace internal {
-
+    
         ImmaturePoint::ImmaturePoint(shared_ptr<Frame> hostFrame, shared_ptr<Feature> hostFeat, float type,
                                      shared_ptr<CalibHessian> &HCalib) :
                 my_type(type), feature(hostFeat) {
             assert(hostFrame->frameHessian);
+            // H 设置为零 2x2的矩阵
             gradH.setZero();
             shared_ptr<FrameHessian> host = hostFrame->frameHessian;
             float u = feature->uv[0], v = feature->uv[1];

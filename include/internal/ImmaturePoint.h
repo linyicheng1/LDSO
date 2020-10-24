@@ -38,9 +38,10 @@ namespace ldso {
         };
 
         /**
-         * The immature point
+         * The immature point 
          * An immature point is a point whose inverse depth has not converged.
          * When a feature is created we will initialize it with an immature point, and then we will try to trace it in other images by searching the epipolar line, and hope it will finally converge. If so, we will create a map point according to this immature point, otherwise we just discard it.
+         * 未成熟的点，当逆深度收敛后则创建一个3d地图点
          */
         class ImmaturePoint {
         public:
@@ -48,14 +49,14 @@ namespace ldso {
 
             /**
              * create an immature point from a host frame and a host feature
-             * @param hostFrame
-             * @param hostFeat
-             * @param type
-             * @param HCalib
+             * @param hostFrame  所属的帧
+             * @param hostFeat   对应的特征点
+             * @param type       类型
+             * @param HCalib     标定参数
              */
             ImmaturePoint(shared_ptr<Frame> hostFrame, shared_ptr<Feature> hostFeat, float type,
                           shared_ptr<CalibHessian> &HCalib);
-
+            // 空的析构函数
             ~ImmaturePoint() {}
 
             /**

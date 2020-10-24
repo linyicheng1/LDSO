@@ -374,6 +374,7 @@ int main(int argc, char **argv) {
                     skipFrame = true;
                 }
             }
+            // 调用函数 addActiveFrame
             if (!skipFrame) fullSystem->addActiveFrame(img, i);
             delete img;
 

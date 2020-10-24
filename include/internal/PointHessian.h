@@ -15,25 +15,31 @@ namespace ldso {
 
         /**
          * Point hessian is the internal structure of a map point
+         * 点的 hessian 是3d地图点的一个内部结构体
          */
         class PointHessian {
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
             // create the point hessian from immature point
+            // 从一个未成熟的点，构造点的Hessian
             PointHessian(shared_ptr<ImmaturePoint> rawPoint);
 
             PointHessian() {}
-
+            // 设置逆深度
             inline void setIdepth(float idepth) {
+                // 当前逆深度
                 this->idepth = idepth;
+                // 缩放后的逆深度，默认缩放系数为1，这个应该是回环的时候用到缩放
                 this->idepth_scaled = SCALE_IDEPTH * idepth;
+                // 
                 if (point->mHostFeature.expired()) {
                     LOG(FATAL) << "host feature expired!" << endl;
                 }
+                // 同时设置3d地图点的逆深度也为idepth
                 point->mHostFeature.lock()->invD = idepth;
             }
-
+            // 设置缩放后的逆深度大小
             inline void setIdepthScaled(float idepth_scaled) {
                 this->idepth = SCALE_IDEPTH_INVERSE * idepth_scaled;
                 this->idepth_scaled = idepth_scaled;
@@ -42,7 +48,7 @@ namespace ldso {
                 }
                 point->mHostFeature.lock()->invD = idepth;
             }
-
+            // 设置逆深度为零
             inline void setIdepthZero(float idepth) {
                 idepth_zero = idepth;
                 idepth_zero_scaled = SCALE_IDEPTH * idepth;
@@ -50,6 +56,7 @@ namespace ldso {
             }
 
             // judge if this point is out of boundary
+            // 判断该点是否在边界内
             inline bool isOOB(std::vector<shared_ptr<FrameHessian>> &toMarg) {
 
                 int visInToMarg = 0;

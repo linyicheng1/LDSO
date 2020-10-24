@@ -11,31 +11,43 @@ using namespace ldso::internal;
 
 namespace ldso {
 
+    /**
+     * 从未成熟的点中，创建3d地图点
+     * */
     void Feature::CreateFromImmature() {
+        // 如果3d地图点已经存在了，就不要创建第二次
         if (point) {
             LOG(WARNING) << "Map point already created! You cannot create twice! " << endl;
             return;
         }
         assert(ip != nullptr);
-
+        // 使用当前特征点，创建一个3d地图点
         point = shared_ptr<Point>(new Point(ip->feature));
+        // 指针指向该3d地图点
         point->mpPH->point = point;   // set the point hessians backward pointer
+        // 设置当前状态为有效的
         status = Feature::FeatureStatus::VALID;
     }
-
+    /**
+     * 删除对应的未成熟的点
+     * */
     void Feature::ReleaseImmature() {
         if (ip) {
-            ip->feature = nullptr;
-            ip = nullptr;
+            ip->feature = nullptr;// 未成熟点不再指向当前特征
+            ip = nullptr;// 当前特征也不指向未成熟点
         }
     }
-
+    /**
+     * 删除对应的地图点
+     * */
     void Feature::ReleaseMapPoint() {
         if (point) {
-            point->ReleasePH();
+            point->ReleasePH();// 调用点中的删除函数即可
         }
     }
-
+    /**
+     * 保存数据
+     * */
     void Feature::save(ofstream &fout) {
         fout.write((char *) &status, sizeof(status));
         fout.write((char *) &uv[0], sizeof(float));
@@ -48,7 +60,9 @@ namespace ldso {
         if (point && status == Feature::FeatureStatus::VALID)
             point->save(fout);
     }
-
+    /**
+     * 加载数据
+     * */
     void Feature::load(ifstream &fin, vector<shared_ptr<Frame>> &allKFs) {
 
         fin.read((char *) &status, sizeof(status));

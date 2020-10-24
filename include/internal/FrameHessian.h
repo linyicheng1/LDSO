@@ -24,14 +24,15 @@ namespace ldso {
         /**
          * Frame hessian is the internal structure used in dso
          */
+        // FrameHessian 结构，包含在Frame类内
         class FrameHessian {
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-
+            // 存储相关的frame的指针
             FrameHessian(shared_ptr<Frame> frame) {
                 this->frame = frame;
             }
-
+            // 析构函数
             ~FrameHessian() {
                 for (int i = 0; i < pyrLevelsUsed; i++) {
                     delete[] dIp[i];
@@ -43,20 +44,20 @@ namespace ldso {
             EIGEN_STRONG_INLINE const SE3 &get_worldToCam_evalPT() const {
                 return worldToCam_evalPT;
             }
-
+            // 获取零状态
             EIGEN_STRONG_INLINE const Vec10 &get_state_zero() const {
                 return state_zero;
             }
-
+            // 获取当前状态
             EIGEN_STRONG_INLINE const Vec10 &get_state() const {
                 return state;
             }
-
+            // 获取缩放后的状态
             EIGEN_STRONG_INLINE const Vec10 &get_state_scaled() const {
                 return state_scaled;
             }
 
-            // state - state0
+            // state - state0 
             EIGEN_STRONG_INLINE const Vec10 get_state_minus_stateZero() const {
                 return get_state() - get_state_zero();
             }
@@ -159,7 +160,7 @@ namespace ldso {
 
             // Data
             int frameID = 0;              // key-frame ID, will be set when adding new keyframes
-            shared_ptr<Frame> frame = nullptr;    // link to original frame
+            shared_ptr<Frame> frame = nullptr;    // 连接原始帧的指针 link to original frame
 
             // internal structures used in DSO
             // image pyramid and gradient image

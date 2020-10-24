@@ -24,6 +24,7 @@ namespace ldso {
     /**
      * Frame is the basic element holding the pose and image data.
      * Here is only the minimal required data, the inner structures are stored in FrameHessian
+     * 一帧数据结构
      */
     struct Frame {
     public:
@@ -33,7 +34,7 @@ namespace ldso {
 
         /**
          * Constructro with timestamp
-         * @param timestamp
+         * @param timestamp 采集数据的时间戳
          */
         Frame(double timestamp);
 
@@ -94,17 +95,19 @@ namespace ldso {
         void load(ifstream &fin, shared_ptr<Frame> &thisFrame, vector<shared_ptr<Frame>> &allKF);
 
         // get and write pose
+        // 获得当前帧的位姿
         SE3 getPose() {
             unique_lock<mutex> lck(poseMutex);
             return Tcw;
         }
-
+        // 设置当前帧的位姿
         void setPose(const SE3 &Tcw) {
             unique_lock<mutex> lck(poseMutex);
             this->Tcw = Tcw;
         }
 
         // get and write the optimized pose by loop closing
+        // 回环后的位姿
         Sim3 getPoseOpti() {
             unique_lock<mutex> lck(poseMutex);
             return TcwOpti;
@@ -117,31 +120,33 @@ namespace ldso {
 
         // =========================================================================================================
         // data
-        unsigned long id = 0;        // id of this frame
-        static unsigned long nextId;  // next id
-        unsigned long kfId = 0;      // keyframe id of this frame
+        unsigned long id = 0;        //  当前帧的id id of this frame
+        static unsigned long nextId;  // 所有帧的计数id next id
+        unsigned long kfId = 0;      //  关键帧的id keyframe id of this frame
 
     private:
         // poses
         // access them by getPose and getPoseOpti function
         mutex poseMutex;            // need to lock this pose since we have multiple threads reading and writing them
-        SE3 Tcw;           // pose from world to camera, estimated by DSO (nobody wants to touch DSO's backend except Jakob)
-        Sim3 TcwOpti;     // pose from world to camera optimized by global pose graph (with scale)
+        SE3 Tcw;           // 世界坐标系下的位姿 pose from world to camera, estimated by DSO (nobody wants to touch DSO's backend except Jakob)
+        Sim3 TcwOpti;      // 世界坐标系下的位姿，经过回环缩放后得到的 pose from world to camera optimized by global pose graph (with scale)
 
     public:
-        bool poseValid = true;     // if pose is valid (false when initializing)
-        double timeStamp = 0;      // time stamp
-        AffLight aff_g2l;           // aff light transform from global to local
-        vector<shared_ptr<Feature>> features;  // Features contained
+        bool poseValid = true;     // 当前位置是否可用，在初始化时为false if pose is valid (false when initializing)
+        double timeStamp = 0;      // 采集当前帧数据的时间 time stamp
+        AffLight aff_g2l;           // 光度的仿射变换，ab参数 aff light transform from global to local
+        vector<shared_ptr<Feature>> features;  // 当前帧包含所有的特征点 Features contained
+        // 栅格，首先包含了所有的栅格，栅格中又包含在范围内所有特征点的id
         vector<vector<std::size_t>> grid;      // feature grid, to fast access features in a given area
-        const int gridSize = 20;                // grid size
+        const int gridSize = 20;                // 栅格的大小 grid size
 
         // pose relative to keyframes in the window, stored as T_cur_ref
         // this will be changed by full system and loop closing, so we need a mutex
-        std::mutex mutexPoseRel;
+        std::mutex mutexPoseRel;// 更新帧的位姿的线程锁
 
         /**
          * Relative pose constraint between key-frames
+         * 相对的位姿，使用Sim3来表达
          */
         struct RELPOSE {
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
@@ -155,16 +160,19 @@ namespace ldso {
         };
 
         // relative poses within the active window
+        // 在窗口中的相关位姿
         map<shared_ptr<Frame>, RELPOSE, std::less<shared_ptr<Frame>>, Eigen::aligned_allocator<std::pair<const shared_ptr<Frame>, RELPOSE>>> poseRel;
 
         // Bag of Words Vector structures.
+        // 词袋模型的数据结构向量
         DBoW3::BowVector bowVec;       // BoW Vector
         DBoW3::FeatureVector featVec;  // Feature Vector
         vector<size_t> bowIdx;         // index of the bow-ized corners
-
-        shared_ptr<internal::FrameHessian> frameHessian = nullptr;  // internal data
+        // TODO 
+        shared_ptr<internal::FrameHessian> frameHessian = nullptr;  // 内部的数据结构 internal data
 
         // ===== debug stuffs ======= //
+        // 用来显示的可视化图片
         cv::Mat imgDisplay;    // image to display, only for debugging, remain an empty image if setting_show_loopclosing is false
     };
 

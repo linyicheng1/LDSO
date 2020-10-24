@@ -32,11 +32,14 @@ namespace ldso {
         }
         return 90;
     }
-
+    // makeMaps 中调用
+    // fh 为输入帧数据
     void PixelSelector::makeHists(shared_ptr<FrameHessian> fh) {
+        // 指针指向该帧
         gradHistFrame = fh;
+        // 拿到计算好的梯度数据
         float *mapmax0 = fh->absSquaredGrad[0];
-
+        // 宽度 高度
         int w = wG[0];
         int h = hG[0];
 
@@ -46,7 +49,10 @@ namespace ldso {
 
         for (int y = 0; y < h32; y++)
             for (int x = 0; x < w32; x++) {
+                // 每隔 32 x 32 的方块后循环一次
+                // 对应的梯度值
                 float *map0 = mapmax0 + 32 * x + 32 * y * w;
+                // 赋值为零
                 int *hist0 = gradHist;// + 50*(x+y*w32);
                 memset(hist0, 0, sizeof(int) * 50);
 
@@ -55,6 +61,7 @@ namespace ldso {
                         int it = i + 32 * x;
                         int jt = j + 32 * y;
                         if (it > w - 2 || jt > h - 2 || it < 1 || jt < 1) continue;
+                        // 找到大于48 的点
                         int g = sqrtf(map0[i + j * w]);
                         if (g > 48) g = 48;
                         hist0[g + 1]++;
@@ -108,17 +115,23 @@ namespace ldso {
             }
     }
 
+    /**
+     * @brief 从输入的图像中筛选出点
+     * */
     int PixelSelector::makeMaps(const shared_ptr<FrameHessian> fh, float *map_out, float density,
                                 int recursionsLeft, bool plot, float thFactor) {
-
+        // 当前已经有的数量
         float numHave = 0;
+        // 期望找出density数量的点
         float numWant = density;
+        // 
         float quotia;
         int idealPotential = currentPotential;
-
+        // fh非空，调用makeHists 
         if (fh != gradHistFrame) makeHists(fh);
 
         // select!
+        // 选择
         Eigen::Vector3i n = this->select(fh, map_out, currentPotential, thFactor);
 
         // sub-select!
@@ -165,23 +178,24 @@ namespace ldso {
         currentPotential = idealPotential;
 
         return numHaveSub;
-    }
-
+    }   
+    // 选择点
     Eigen::Vector3i PixelSelector::select(const shared_ptr<FrameHessian> fh, float *map_out, int pot,
                                           float thFactor) {
+        // map0为原始图像值                                      
         Eigen::Vector3f const *const map0 = fh->dI;
-
+        // 地图数据
         float *mapmax0 = fh->absSquaredGrad[0];
         float *mapmax1 = fh->absSquaredGrad[1];
         float *mapmax2 = fh->absSquaredGrad[2];
 
-
+        // 不同金字塔层下的宽度
         int w = wG[0];
         int w1 = wG[1];
         int w2 = wG[2];
         int h = hG[0];
 
-
+        // 方向 16个方向
         const Vec2f directions[16] = {
                 Vec2f(0, 1.0000),
                 Vec2f(0.3827, 0.9239),
@@ -199,22 +213,25 @@ namespace ldso {
                 Vec2f(0.9808, -0.1951),
                 Vec2f(1.0000, 0.0000),
                 Vec2f(0.1951, -0.9808)};
-
+        // 初始状态为 0
         memset(map_out, 0, w * h * sizeof(PixelSelectorStatus));
-
+        // 金字塔缩放比例
         float dw1 = setting_gradDownweightPerLevel;
+        // 缩放比例的平方
         float dw2 = dw1 * dw1;
-
+        // 初始各层的点数为0
         int n3 = 0, n2 = 0, n4 = 0;
-        for (int y4 = 0; y4 < h; y4 += (4 * pot))
-            for (int x4 = 0; x4 < w; x4 += (4 * pot)) {
+        for (int y4 = 0; y4 < h; y4 += (4 * pot))// 遍历每四层
+            for (int x4 = 0; x4 < w; x4 += (4 * pot)) {// 遍历每四列
+                // 避免了越界
                 int my3 = std::min((4 * pot), h - y4);
                 int mx3 = std::min((4 * pot), w - x4);
                 int bestIdx4 = -1;
                 float bestVal4 = 0;
+                // 随机得到一个方向
                 Vec2f dir4 = directions[randomPattern[n2] & 0xF];
                 for (int y3 = 0; y3 < my3; y3 += (2 * pot))
-                    for (int x3 = 0; x3 < mx3; x3 += (2 * pot)) {
+                    for (int x3 = 0; x3 < mx3; x3 += (2 * pot)) {// 遍历四列中的每两列，两行
                         int x34 = x3 + x4;
                         int y34 = y3 + y4;
                         int my2 = std::min((2 * pot), h - y34);
@@ -223,7 +240,7 @@ namespace ldso {
                         float bestVal3 = 0;
                         Vec2f dir3 = directions[randomPattern[n2] & 0xF];
                         for (int y2 = 0; y2 < my2; y2 += pot)
-                            for (int x2 = 0; x2 < mx2; x2 += pot) {
+                            for (int x2 = 0; x2 < mx2; x2 += pot) {// 遍历每一列
                                 int x234 = x2 + x34;
                                 int y234 = y2 + y34;
                                 int my1 = std::min(pot, h - y234);
@@ -232,7 +249,7 @@ namespace ldso {
                                 float bestVal2 = 0;
                                 Vec2f dir2 = directions[randomPattern[n2] & 0xF];
                                 for (int y1 = 0; y1 < my1; y1 += 1)
-                                    for (int x1 = 0; x1 < mx1; x1 += 1) {
+                                    for (int x1 = 0; x1 < mx1; x1 += 1) {// 遍历
                                         assert(x1 + x234 < w);
                                         assert(y1 + y234 < h);
                                         int idx = x1 + x234 + w * (y1 + y234);
@@ -310,7 +327,7 @@ namespace ldso {
                 }
             }
 
-
+        // 返回每一层的点数目
         return Eigen::Vector3i(n2, n3, n4);
     }
 

@@ -19,17 +19,19 @@ namespace ldso {
     /**
      * point structure used in coarse initializer
      */
+    // 在粗糙的初始化时使用的点结构体
     struct Pnt {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
         // index in jacobian. never changes (actually, there is no reason why).
+        // 点的坐标，对应jacobian的位置
         float u, v;
 
         // idepth / isgood / energy during optimization.
-        float idepth;
-        bool isGood;
-        Vec2f energy;        // (UenergyPhotometric, energyRegularizer)
+        float idepth;// 逆深度
+        bool isGood;// 是否良好的跟踪到
+        Vec2f energy;        // 残差 (UenergyPhotometric, energyRegularizer)
         bool isGood_new;
         float idepth_new;
         Vec2f energy_new;
@@ -57,36 +59,37 @@ namespace ldso {
 
     /**
      * initializer for monocular slam
+     * 单目slam的初始化
      */
     class CoarseInitializer {
     public:
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-
+        // 构造函数，w h为图像的大小
         CoarseInitializer(int w, int h);
-
+        // 析构函数
         ~CoarseInitializer();
-
-
+        // 设置第一帧数据
         void setFirst(shared_ptr<CalibHessian> HCalib, shared_ptr<FrameHessian> newFrameHessian);
-
+        // 跟踪后面的数据
         bool trackFrame(shared_ptr<FrameHessian> newFrameHessian);
-
+        // 
         void calcTGrads(shared_ptr<FrameHessian> newFrameHessian);
 
         int frameID = -1;
-        bool fixAffine = true;
-        bool printDebug = false;
+        bool fixAffine = true;// 是否需要仿射变换
+        bool printDebug = false;// 是否输出调试信息
 
-        Pnt *points[PYR_LEVELS];
-        int numPoints[PYR_LEVELS];
-        AffLight thisToNext_aff;
-        SE3 thisToNext;
+        Pnt *points[PYR_LEVELS];// 存储每一层图像金字塔内的点
+        int numPoints[PYR_LEVELS];// 存储每一层图像金字塔内含有点的数量
+        AffLight thisToNext_aff;// 当前帧到下一帧的光度仿射变换
+        SE3 thisToNext;// 当前帧到下一帧的位姿变换
 
 
-        shared_ptr<FrameHessian> firstFrame;
-        shared_ptr<FrameHessian> newFrame;
+        shared_ptr<FrameHessian> firstFrame;// 第一帧的数据的指针
+        shared_ptr<FrameHessian> newFrame;// 第二帧的数据指针
     private:
+        // 金字塔各层对应的相机参数
         Mat33 K[PYR_LEVELS];
         Mat33 Ki[PYR_LEVELS];
         double fx[PYR_LEVELS];
@@ -99,7 +102,7 @@ namespace ldso {
         double cyi[PYR_LEVELS];
         int w[PYR_LEVELS];
         int h[PYR_LEVELS];
-
+        // 计算金字塔各层对应的相机参数，得到上面的所有参数
         void makeK(shared_ptr<CalibHessian> HCalib);
 
         bool snapped;
@@ -108,7 +111,7 @@ namespace ldso {
         // pyramid images & levels on all levels
         Eigen::Vector3f *dINew[PYR_LEVELS];
         Eigen::Vector3f *dIFist[PYR_LEVELS];
-
+        // 对角矩阵 8x8
         Eigen::DiagonalMatrix<float, 8> wM;
 
         // temporary buffers for H and b.
@@ -154,6 +157,7 @@ namespace ldso {
 
     /**
      * minimal flann point cloud
+     * 最小化 flann 点云
      */
     struct FLANNPointcloud {
         inline FLANNPointcloud() {

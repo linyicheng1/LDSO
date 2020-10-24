@@ -12,6 +12,7 @@ namespace ldso {
 
         /**
          * Camera intrinsics with hessian
+         * 相机内参
          */
         class CalibHessian {
         public:
@@ -19,16 +20,17 @@ namespace ldso {
 
             CalibHessian(shared_ptr<Camera> cam) : camera(cam) {
 
-                VecC initial_value = VecC::Zero();
-                initial_value[0] = cam->fx;
+                VecC initial_value = VecC::Zero();// 内参设置为零,四维，k1,k2,p1,p2,k3 其中k3默认=0
+                initial_value[0] = cam->fx;// 记录下参数
                 initial_value[1] = cam->fy;
                 initial_value[2] = cam->cx;
                 initial_value[3] = cam->cy;
-
+                // 
                 setValueScaled(initial_value);
+                // 初始参数
                 value_zero = value;
                 value_minus_value_zero.setZero();
-
+                // gamma映射函数，直接认为B[i] = i,即均匀映射
                 for (int i = 0; i < 256; i++) {
                     Binv[i] = B[i] = i;    // set gamma function to identity
                 }
@@ -83,7 +85,7 @@ namespace ldso {
                 this->value_scaledi[3] = -this->value_scaledf[3] / this->value_scaledf[1];
                 this->value_minus_value_zero = this->value - this->value_zero;
             };
-
+            // 设置参数
             inline void setValueScaled(const VecC &value_scaled) {
                 this->value_scaled = value_scaled;
                 this->value_scaledf = this->value_scaled.cast<float>();
@@ -98,7 +100,7 @@ namespace ldso {
                 this->value_scaledi[2] = -this->value_scaledf[2] / this->value_scaledf[0];
                 this->value_scaledi[3] = -this->value_scaledf[3] / this->value_scaledf[1];
             };
-
+            // 得到真实的梯度，考虑到gamma映射
             EIGEN_STRONG_INLINE float getBGradOnly(float color) {
                 int c = color + 0.5f;
                 if (c < 5) {
@@ -120,7 +122,7 @@ namespace ldso {
                 }
                 return Binv[c + 1] - Binv[c];
             }
-
+            // 相机数据结构指针
             shared_ptr<Camera> camera = nullptr;
 
             // values during estimation
@@ -128,6 +130,7 @@ namespace ldso {
             VecC value_scaled;      // [fx, fy, cx, cy] in double
             VecCf value_scaledf;    // [fx, fy, cx, cy] in float
             VecCf value_scaledi;    // inverse of value_scaledf
+
             VecC value;
             VecC step;
             VecC step_backup;

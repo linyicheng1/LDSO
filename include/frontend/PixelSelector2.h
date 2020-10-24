@@ -10,24 +10,26 @@ using namespace ldso;
 using ldso::internal::FrameHessian;
 
 namespace ldso {
-
+    // 像素选择状态
     enum PixelSelectorStatus {
         PIXSEL_VOID = 0, PIXSEL_1, PIXSEL_2, PIXSEL_3
     };
-
+    // 像素选择类
     class PixelSelector {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
         /**
          * select points from an input frame
-         * @param fh
-         * @param map_out an image of point selection, same size with the input image and value != 0 means the point is selected
+         * 从输入的一帧数据中，删选出点
+         * @param fh 输入的一帧数据
+         * @param map_out 被选中的点，只要对应id的值大于零即为被选中 an image of point selection, same size with the input image and value != 0 means the point is selected
          * // below is some parameters affecting the selection
-         * @param density
-         * @param recursionsLeft
-         * @param plot
-         * @param thFactor
+         * 选择点的一些参数
+         * @param density          密度       
+         * @param recursionsLeft   
+         * @param plot             输出  
+         * @param thFactor         因子
          * @return number of selected points
          */
         int makeMaps(

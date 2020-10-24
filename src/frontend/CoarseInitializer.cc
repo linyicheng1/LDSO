@@ -9,36 +9,43 @@
 
 
 namespace ldso {
-
+    /**
+     * @brief 构造函数
+     * @param ww 图片宽度
+     * @param hh 图片长度
+     * */
     CoarseInitializer::CoarseInitializer(int ww, int hh) : thisToNext_aff(0, 0), thisToNext(SE3()) {
+        // 遍历所有金字塔层数
         for (int lvl = 0; lvl < pyrLevelsUsed; lvl++) {
             points[lvl] = 0;
             numPoints[lvl] = 0;
         }
-
+        // 雅克比矩阵的大小每一个像素点对应一个Vec10f，共ww*hh个
         JbBuffer = new Vec10f[ww * hh];
         JbBuffer_new = new Vec10f[ww * hh];
-
+        // 需要使用仿射变换
         fixAffine = true;
+        // 不输出debug信息
         printDebug = false;
-
+        // wM对角矩阵 8x8
         wM.diagonal()[0] = wM.diagonal()[1] = wM.diagonal()[2] = SCALE_XI_ROT;
         wM.diagonal()[3] = wM.diagonal()[4] = wM.diagonal()[5] = SCALE_XI_TRANS;
         wM.diagonal()[6] = SCALE_A;
         wM.diagonal()[7] = SCALE_B;
     }
-
+    // 析构函数
     CoarseInitializer::~CoarseInitializer() {
+        // 遍历所有金字塔层数，删除所有的点
         for (int lvl = 0; lvl < pyrLevelsUsed; lvl++) {
             if (points[lvl] != 0) delete[] points[lvl];
         }
-
+        // 删除临时存储变量
         delete[] JbBuffer;
         delete[] JbBuffer_new;
     }
-
+    // 输入第二帧数据进行处理
     bool CoarseInitializer::trackFrame(shared_ptr<FrameHessian> newFrameHessian) {
-
+        // 
         newFrame = newFrameHessian;
         int maxIterations[] = {5, 5, 10, 30, 50};
 
@@ -543,21 +550,29 @@ namespace ldso {
             }
         }
     }
-
+    /**
+     * @brief 设置第一帧数据
+     * @param HCalib 相机标定参数
+     * @param newFrameHessian 第一帧数据
+     * */
     void CoarseInitializer::setFirst(shared_ptr<CalibHessian> HCalib, shared_ptr<FrameHessian> newFrameHessian) {
-
+        // 计算金字塔各层的相机参数 
         makeK(HCalib);
+        // 第一帧指向新的一帧
         firstFrame = newFrameHessian;
-
+        // PixelSelector  
         PixelSelector sel(w[0], h[0]);
-
+        // 存储各点的状态，statusMap > 0 即为被选中的点
         float *statusMap = new float[w[0] * h[0]];
         bool *statusMapB = new bool[w[0] * h[0]];
 
         float densities[] = {0.03, 0.05, 0.15, 0.5, 1};
-        for (int lvl = 0; lvl < pyrLevelsUsed; lvl++) {
+        // 遍历所有的金字塔层级
+        for (int lvl = 0; lvl < pyrLevelsUsed; lvl++) 
+        {
             sel.currentPotential = 3;
             int npts;
+            // 选择梯度明显的点
             if (lvl == 0) {
                 npts = sel.makeMaps(firstFrame, statusMap, densities[lvl] * w[0] * h[0], 1, false, 2);
             } else {
@@ -565,6 +580,7 @@ namespace ldso {
             }
 
             if (points[lvl] != 0) delete[] points[lvl];
+            // 创建一个新的点
             points[lvl] = new Pnt[npts];
 
             // set idepth map to initially 1 everywhere.
@@ -575,6 +591,7 @@ namespace ldso {
                 for (int x = patternPadding + 1; x < wl - patternPadding - 2; x++) {
                     if ((lvl != 0 && statusMapB[x + y * wl]) || (lvl == 0 && statusMap[x + y * wl] != 0)) {
                         //assert(patternNum==9);
+                        // 对当前层所有点进行赋值
                         pl[nl].u = x + 0.1;
                         pl[nl].v = y + 0.1;
                         pl[nl].idepth = 1;
@@ -686,24 +703,32 @@ namespace ldso {
         std::swap<Vec10f *>(JbBuffer, JbBuffer_new);
     }
 
+    /**
+     * @brief 在输入第一帧数据和标定参数时调用
+     * @param Hcalib 标定参数
+     * */
     void CoarseInitializer::makeK(shared_ptr<CalibHessian> HCalib) {
+        // w[0] h[0]
         w[0] = wG[0];
         h[0] = hG[0];
-
+        // fx fy cx cy 都等于原始值
         fx[0] = HCalib->fxl();
         fy[0] = HCalib->fyl();
         cx[0] = HCalib->cxl();
         cy[0] = HCalib->cyl();
-
+        // 遍历所有金字塔层
         for (int level = 1; level < pyrLevelsUsed; ++level) {
+            // w 和 h缩放响应倍数
             w[level] = w[0] >> level;
             h[level] = h[0] >> level;
+            // fx = fx / 2 
             fx[level] = fx[level - 1] * 0.5;
             fy[level] = fy[level - 1] * 0.5;
+            // cx cy 
             cx[level] = (cx[0] + 0.5) / ((int) 1 << level) - 0.5;
             cy[level] = (cy[0] + 0.5) / ((int) 1 << level) - 0.5;
         }
-
+        // 内参矩阵
         for (int level = 0; level < pyrLevelsUsed; ++level) {
             K[level] << fx[level], 0.0, cx[level], 0.0, fy[level], cy[level], 0.0, 0.0, 1.0;
             Ki[level] = K[level].inverse();
